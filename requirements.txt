@@ -1,0 +1,4 @@
+feedparser
+discord.py
+requests
+pyyaml
