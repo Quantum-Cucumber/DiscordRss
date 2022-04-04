@@ -1,0 +1,11 @@
+webhook: https://discord.com/api/webhooks/...
+
+sources:
+    Matrix:
+        feed: https://matrix.org/blog/feed
+        embed:
+            colour: 2960685
+            title: $entry.title
+            url: $entry.link
+            body: $entry.summary
+            thumbnail: https://raw.githubusercontent.com/vector-im/logos/master/matrix/matrix-logo-white.png

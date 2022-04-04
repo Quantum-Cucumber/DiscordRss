@@ -59,7 +59,6 @@ def send_entry(webhook: Webhook,
     embed.url = parse_field(fields.get("url"))
     embed.description = parse_field(fields.get("body"))
     embed = embed.set_thumbnail(url=(parse_field(fields.get("thumbnail")) or Embed.Empty))
-    print(embed.to_dict())
 
     webhook.send(username=f"{name} RSS Feed", content=f"New post in {name}!", embed=embed)
 
