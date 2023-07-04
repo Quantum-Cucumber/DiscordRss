@@ -25,3 +25,4 @@ For the fields that can be extracted, see the [Feedparser documentation](https:/
 ### Optional fields
 Optional fields can be specified to accommodate variances in RSS feed layouts
 - `sources -> NAME -> id` - The field to use to differentiate posts 
+- `sources -> NAME -> oldest_first` -  true = The oldest entry will be the first in the feed, false = The oldest entry will be the last in the feed

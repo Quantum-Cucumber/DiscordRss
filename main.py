@@ -81,23 +81,24 @@ async def main():
 
             # Which field to save for the ID. If not specified, use "id"
             id_field = data.get("id", "id")
+            oldest_first = data.get("oldest_first", False)
 
             # Read the rss feed
             feed = feedparser.parse(data["feed"])
 
-            latest_id = parse_field(feed, feed.entries[0], id_field)
+            entries = feed.entries[::-1] if oldest_first else feed.entries
+
+            latest_id = parse_field(feed, entries[0], id_field)
             new_cache.update({name: latest_id})
 
             if name not in cache:
-                print("Send one")
                 # If feed has no cached ID, just send 1 entry
-                await send_entry(webhook, feed["feed"], feed.entries[-1], name, data["embed"])
+                await send_entry(webhook, feed["feed"], entries[0], name, data["embed"])
             else:
-                print("Send unsent")
                 # Send all unsent entries
                 last_sent_id = cache[name]
 
-                for entry in feed.entries:
+                for entry in entries:
                     if parse_field(feed, entry, id_field) != last_sent_id:
                         await send_entry(webhook, feed["feed"], entry, name, data["embed"])
                     else:
