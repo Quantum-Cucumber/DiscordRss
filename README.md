@@ -21,3 +21,7 @@ Child fields can be accessed by appending a `.` and then the name of the field.
 For example, `$feed.image.href` or `$entry.summary`
 
 For the fields that can be extracted, see the [Feedparser documentation](https://feedparser.readthedocs.io/en/latest/reference.html).
+
+### Optional fields
+Optional fields can be specified to accommodate variances in RSS feed layouts
+- `sources -> NAME -> id` - The field to use to differentiate posts 

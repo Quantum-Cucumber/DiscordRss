@@ -40,29 +40,30 @@ def crawl_dict(data: dict, path: List[str]):
     return crawl(data, path)
 
 
+def parse_field(feed: feedparser.FeedParserDict, entry: feedparser.FeedParserDict, field):
+    if isinstance(field, str) and field.startswith("$"):
+        path = field.lstrip("$").split(".")
+
+        source = path.pop(0)
+        if source == "entry":
+            return crawl_dict(entry, path)
+        elif source == "feed":
+            return crawl_dict(feed, path)
+    else:
+        return field
+
+
 async def send_entry(webhook: Webhook,
                      feed: feedparser.FeedParserDict, entry: feedparser.FeedParserDict,
                      name: str, fields: dict):
-    def parse_field(field):
-        if isinstance(field, str) and field.startswith("$"):
-            path = field.lstrip("$").split(".")
-
-            source = path.pop(0)
-            if source == "entry":
-                return crawl_dict(entry, path)
-            elif source == "feed":
-                return crawl_dict(feed, path)
-        else:
-            return field
-
     embed = Embed()
     embed.colour = fields.get("colour") or fields.get("color") or Embed.Empty
-    embed.title = parse_field(fields.get("title"))
-    embed.url = parse_field(fields.get("url"))
-    embed.description = parse_field(fields.get("body"))
+    embed.title = parse_field(feed, entry, fields.get("title"))
+    embed.url = parse_field(feed, entry, fields.get("url"))
+    embed.description = parse_field(feed, entry, fields.get("body"))
     if embed.description and len(embed.description) > 2000:
         embed.description = embed.description[:2000] + "..."
-    embed = embed.set_thumbnail(url=(parse_field(fields.get("thumbnail")) or Embed.Empty))
+    embed = embed.set_thumbnail(url=(parse_field(feed, entry, fields.get("thumbnail")) or Embed.Empty))
 
     await webhook.send(username=f"{name} RSS Feed", content=f"New post in {name}!", embed=embed)
 
@@ -78,21 +79,29 @@ async def main():
         for name, data in sources.items():
             print("Loading", name)
 
+            # Which field to save for the ID. If not specified, use "id"
+            id_field = data.get("id", "id")
+
             # Read the rss feed
             feed = feedparser.parse(data["feed"])
 
-            latest_id = feed.entries[0].id
+            latest_id = parse_field(feed, feed.entries[0], id_field)
             new_cache.update({name: latest_id})
 
-            last_sent_id = cache.get(name)  # Will be None if no cache entry exists
-            for entry in feed.entries:
-                if entry.id != last_sent_id:
-                    await send_entry(webhook, feed["feed"], entry, name, data["embed"])
+            if name not in cache:
+                print("Send one")
+                # If feed has no cached ID, just send 1 entry
+                await send_entry(webhook, feed["feed"], feed.entries[-1], name, data["embed"])
+            else:
+                print("Send unsent")
+                # Send all unsent entries
+                last_sent_id = cache[name]
 
-                    if last_sent_id is None:  # Only send 1 entry
+                for entry in feed.entries:
+                    if parse_field(feed, entry, id_field) != last_sent_id:
+                        await send_entry(webhook, feed["feed"], entry, name, data["embed"])
+                    else:
                         break
-                else:
-                    break
 
     # Save new cache if needed
     if new_cache != cache:
