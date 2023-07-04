@@ -1,7 +1,9 @@
+import asyncio
+import aiohttp
 import yaml
 import json
 import feedparser
-from discord import Webhook, RequestsWebhookAdapter, Embed
+from discord import Webhook, Embed
 from typing import List
 
 
@@ -18,11 +20,11 @@ def load_cache():
         return {}
 
 
-def build_webhook():
+def build_webhook(session: aiohttp.ClientSession):
     with open("config.yaml", "r") as fd:
         url = yaml.full_load(fd)["webhook"]
 
-    webhook = Webhook.from_url(url, adapter=RequestsWebhookAdapter())
+    webhook = Webhook.from_url(url, session=session)
     return webhook
 
 
@@ -38,9 +40,9 @@ def crawl_dict(data: dict, path: List[str]):
     return crawl(data, path)
 
 
-def send_entry(webhook: Webhook,
-               feed: feedparser.FeedParserDict, entry: feedparser.FeedParserDict,
-               name: str, fields: dict):
+async def send_entry(webhook: Webhook,
+                     feed: feedparser.FeedParserDict, entry: feedparser.FeedParserDict,
+                     name: str, fields: dict):
     def parse_field(field):
         if isinstance(field, str) and field.startswith("$"):
             path = field.lstrip("$").split(".")
@@ -58,36 +60,39 @@ def send_entry(webhook: Webhook,
     embed.title = parse_field(fields.get("title"))
     embed.url = parse_field(fields.get("url"))
     embed.description = parse_field(fields.get("body"))
+    if embed.description and len(embed.description) > 2000:
+        embed.description = embed.description[:2000] + "..."
     embed = embed.set_thumbnail(url=(parse_field(fields.get("thumbnail")) or Embed.Empty))
 
-    webhook.send(username=f"{name} RSS Feed", content=f"New post in {name}!", embed=embed)
+    await webhook.send(username=f"{name} RSS Feed", content=f"New post in {name}!", embed=embed)
 
 
-def main():
-    sources = load_sources()
-    cache = load_cache()
-    webhook = build_webhook()
+async def main():
+    async with aiohttp.ClientSession() as session:
+        sources = load_sources()
+        cache = load_cache()
+        webhook = build_webhook(session)
 
-    # Process all sources
-    new_cache = {}
-    for name, data in sources.items():
-        print("Loading", name)
+        # Process all sources
+        new_cache = {}
+        for name, data in sources.items():
+            print("Loading", name)
 
-        # Read the rss feed
-        feed = feedparser.parse(data["feed"])
+            # Read the rss feed
+            feed = feedparser.parse(data["feed"])
 
-        latest_id = feed.entries[0].id
-        new_cache.update({name: latest_id})
+            latest_id = feed.entries[0].id
+            new_cache.update({name: latest_id})
 
-        last_sent_id = cache.get(name)  # Will be None if no cache entry exists
-        for entry in feed.entries:
-            if entry.id != last_sent_id:
-                send_entry(webhook, feed["feed"], entry, name, data["embed"])
+            last_sent_id = cache.get(name)  # Will be None if no cache entry exists
+            for entry in feed.entries:
+                if entry.id != last_sent_id:
+                    await send_entry(webhook, feed["feed"], entry, name, data["embed"])
 
-                if last_sent_id is None:  # Only send 1 entry
+                    if last_sent_id is None:  # Only send 1 entry
+                        break
+                else:
                     break
-            else:
-                break
 
     # Save new cache if needed
     if new_cache != cache:
@@ -96,4 +101,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
